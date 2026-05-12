@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Анонимная анкета военнослужащего по призыву</title>
+    <style>
+        /* стили точно такие же, как в предыдущем ответе, плюс стиль для модалки входа */
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { max-width: 800px; margin: 20px auto; padding: 20px; background: #f0f2f5; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { padding: 10px 25px; border: none; background: #cfd8e3; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .tab-btn.active { background: #1b2a3a; color: white; }
+        .tab-content { display: none; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.05); }
+        .tab-content.active { display: block; }
+        .question { margin-bottom: 28px; border-bottom: 1px solid #e9edf2; padding-bottom: 20px; }
+        .question:last-child { border-bottom: none; }
+        .q-title { font-weight: 600; margin: 0 0 10px 0; font-size: 16px; }
+        .options { display: flex; gap: 20px; margin-bottom: 6px; }
+        .options label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 15px; }
+        .comment { margin-top: 8px; }
+        .comment input, .comment textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #ccd5e0; font-size: 14px; }
+        button.primary { background: #1b2a3a; color: white; padding: 12px 28px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin-top: 20px; }
+        button.primary:hover { background: #0f1c2a; }
+        .report-stats { margin-top: 20px; }
+        .bar { background: #eef2f6; height: 28px; margin: 5px 0; border-radius: 6px; display: flex; align-items: center; overflow: hidden; }
+        .bar-fill { height: 100%; background: #2471a3; border-radius: 6px; color: white; padding-left: 8px; font-size: 14px; line-height: 28px; white-space: nowrap; }
+        .text-list { background: #f8f9fb; padding: 12px; border-radius: 6px; max-height: 300px; overflow-y: auto; }
+        .text-list li { margin-bottom: 6px; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 10; }
+        .modal.active { display: flex; }
+        .modal-box { background: white; padding: 30px; border-radius: 12px; width: 320px; text-align: center; }
+        .modal-box input { padding: 8px; width: 100%; margin: 15px 0; border-radius: 6px; border: 1px solid #ccc; }
+        .error { color: red; margin-top: 10px; }
+        .logout-link { display: block; text-align: right; margin-bottom: 10px; color: #2471a3; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<!-- Здесь нужно вставить ваш firebaseConfig -->
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+<script>
+    // ⚠️ ЗАМЕНИТЕ НА ВАШ КОНФИГ
+    const firebaseConfig = {
+        apiKey: "AIzaSyA-kIX7COj9AheE1POmHRAjS0PrRih-Wi4",
+        authDomain: "anketa-prizyv.firebaseapp.com",
+        databaseURL: "https://anketa-prizyv-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "anketa-prizyv",
+        storageBucket: "anketa-prizyv.firebasestorage.app",
+        messagingSenderId: "776490655249",
+        appId: "1:776490655249:web:139af6fabeeff0da809bb0"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const app = initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+</script>
+
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('form')">📝 Анкета</button>
+    <button class="tab-btn" onclick="switchTab('report')">📊 Отчёт (вход)</button>
+</div>
+
+<!-- Вкладка анкеты -->
+<div id="tab-form" class="tab-content active">
+    <h2>Анонимный опрос военнослужащего по призыву</h2>
+    <p>Отвечайте честно. Ответы анонимны и передаются в зашифрованном виде.</p>
+    <form id="survey-form"></form>
+    <button class="primary" onclick="submitForm()">✅ Отправить анонимные ответы</button>
+    <p id="form-msg" style="margin-top:12px; color:#1e8449; font-weight:bold;"></p>
+</div>
+
+<!-- Вкладка отчёта (изначально пустая, заполняется после входа) -->
+<div id="tab-report" class="tab-content">
+    <div id="report-logged-out">
+        <p>Для просмотра отчёта необходимо войти.</p>
+        <button class="primary" onclick="showLoginModal()">🔐 Войти</button>
+    </div>
+    <div id="report-logged-in" style="display:none;">
+        <span class="logout-link" onclick="logout()">Выйти</span>
+        <h2>Сводный отчёт</h2>
+        <p>Всего ответов: <span id="total-count">0</span></p>
+        <button class="primary" onclick="downloadCSV()">📥 Скачать CSV</button>
+        <div id="stats-container" class="report-stats"></div>
+    </div>
+</div>
+
+<!-- Модалка входа -->
+<div id="login-modal" class="modal">
+    <div class="modal-box">
+        <h3>Вход для администратора</h3>
+        <input type="email" id="login-email" placeholder="Email">
+        <input type="password" id="login-password" placeholder="Пароль">
+        <button class="primary" onclick="login()">Войти</button>
+        <p id="login-error" class="error"></p>
+        <button onclick="closeLoginModal()" style="margin-top:10px;">Отмена</button>
+    </div>
+</div>
+
+<script>
+    // ------------------- ВОПРОСЫ --------------------
+    const questions = [
+        { id: 'q1', text: '1. Имеются ли случаи неуставных взаимоотношений в Вашем коллективе?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q2', text: '2. Привлекают ли Вас к выполнению задач, не связанных с выполнением обязанностей военной службы?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q3', text: '3. Применяют ли в отношении Вас или сослуживцев телесные наказания?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q4', text: '4. Позволяют ли офицеры в отношении Вас оскорбления и унижения?', type: 'radio', comment: 'Если да, то кто' },
+        { id: 'q5', text: '5. Устраивает ли Вас пища в солдатской столовой?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q6', text: '6. Проводятся ли с Вами занятия по предметам обучения?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q7', text: '7. Полностью ли Вас обеспечивают вещевым имуществом?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q8', text: '8. Достаточно ли у Вас времени для занятия спортом?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q9', text: '9. Употребляют ли в Вашем подразделении наркотики?', type: 'radio', comment: 'Если да, то кто' },
+        { id: 'q10', text: '10. Употребляют ли Ваши сослуживцы алкоголь в служебное время?', type: 'radio', comment: 'Кто именно' },
+        { id: 'q11', text: '11. Решаются ли Ваши вопросы, если Вы задаете их Вашим командирам?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q12', text: '12. Занимают ли офицеры и военнослужащие по контракту у Вас деньги?', type: 'radio', comment: 'Кто именно' },
+        { id: 'q13', text: '13. Сталкивались ли Вы с тем, что Ваши деньги у Вас незаконно отнимали сослуживцы?', type: 'radio', comment: 'Кто именно' },
+        { id: 'q14', text: '14. Есть ли у Вас предложения, заявления или жалобы?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q15', text: '15. Бывает ли, что Вы пропускали прием пищи в связи с выполнением работ?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q16', text: '16. Хватает ли у Вас времени на ежедневные звонки родным?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q17', text: '17. Ждет ли Вас девушка на «гражданке»?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q18', text: '18. Какие культурные мероприятия Вы бы хотели посещать?', type: 'text', comment: 'Ваш вариант' },
+        { id: 'q19', text: '19. Забирают ли Ваши командиры у Вас сотовые телефоны, установленного образца?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q20', text: '20. Имеются ли случаи не предоставления отдыха после наряда? Если да, то с чем это связано?', type: 'radio', comment: 'Ваш вариант' },
+        { id: 'q21', text: '21. С кем бы Вы не пошли в разведку?', type: 'text', comment: 'Ваш вариант' },
+        { id: 'q22', text: '22. Каков размер Вашего денежного довольствия? (зарплаты)', type: 'number', comment: 'СУММА' },
+        { id: 'q23', text: '23. Кого среди офицеров Центра Вы считаете наиболее авторитетным?', type: 'text', comment: '(ФАМИЛИЯ)' },
+        { id: 'q24', text: '24. Кого среди офицеров Вашего подразделения Вы считаете наиболее авторитетным?', type: 'text', comment: '(ФАМИЛИЯ)' },
+        { id: 'q25', text: '25. Какого сержанта Вы считаете наиболее авторитетным?', type: 'text', comment: '(ФАМИЛИЯ)' },
+        { id: 'q26', text: '26. Без кого в Вашем подразделении было бы лучше служить?', type: 'text', comment: '(ФАМИЛИЯ)' },
+        { id: 'q27', text: '27. Кто по Вашему мнению превышает служебные полномочия?', type: 'text', comment: '(ФАМИЛИЯ)' },
+        { id: 'q28', text: '28. Кто в Вашем окружении психически не здоров, по Вашему мнению?', type: 'text', comment: '(ФАМИЛИЯ)' },
+        { id: 'q29', text: '29. С каким дежурным в Вашем наряде Вам комфортно нести службу?', type: 'text', comment: '(ФАМИЛИЯ)' },
+        { id: 'q30', text: '30. Какой дежурный в Вашем наряде позволяет в отношении Вас грубость?', type: 'text', comment: '(ФАМИЛИЯ)' },
+        { id: 'q31', text: '31. Когда Вы увольняетесь в запас?', type: 'date', comment: '(ДАТА)' },
+        { id: 'q32', text: '32. Что мотивирует лично Вас на выполнение повседневных задач?', type: 'text', comment: 'Ваш вариант' }
+    ];
+
+    // ------------------- ПОСТРОЕНИЕ ФОРМЫ --------------------
+    function buildForm() {
+        const form = document.getElementById('survey-form');
+        let html = '';
+        questions.forEach((q) => {
+            html += `<div class="question"><p class="q-title">${q.text}</p>`;
+            if (q.type === 'radio') {
+                html += `<div class="options">
+                    <label><input type="radio" name="${q.id}" value="Да" required> Да</label>
+                    <label><input type="radio" name="${q.id}" value="Нет"> Нет</label>
+                </div>`;
+                if (q.comment) {
+                    html += `<div class="comment"><input type="text" name="${q.id}_comment" placeholder="${q.comment}"></div>`;
+                }
+            } else if (q.type === 'text') {
+                html += `<div class="comment"><textarea name="${q.id}" rows="2" placeholder="${q.comment}"></textarea></div>`;
+            } else if (q.type === 'number') {
+                html += `<div class="comment"><input type="number" name="${q.id}" placeholder="${q.comment}" style="width:200px;"></div>`;
+            } else if (q.type === 'date') {
+                html += `<div class="comment"><input type="date" name="${q.id}" style="width:200px;"></div>`;
+            }
+            html += `</div>`;
+        });
+        form.innerHTML = html;
+    }
+
+    // ------------------- ОТПРАВКА В FIREBASE --------------------
+    async function submitForm() {
+        const answer = {};
+        let valid = true;
+        questions.forEach(q => {
+            if (q.type === 'radio') {
+                const radios = document.getElementsByName(q.id);
+                let selected = null;
+                radios.forEach(r => { if (r.checked) selected = r.value; });
+                if (!selected) {
+                    valid = false;
+                    alert('Ответьте на вопрос: ' + q.text);
+                    return;
+                }
+                answer[q.id] = selected;
+                const commentField = document.getElementsByName(q.id + '_comment')[0];
+                answer[q.id + '_comment'] = commentField ? commentField.value.trim() : '';
+            } else {
+                const field = document.getElementsByName(q.id)[0];
+                answer[q.id] = field.value.trim();
+            }
+        });
+        if (!valid) return;
+
+        answer.timestamp = new Date().toISOString();
+        try {
+            await db.ref('responses').push(answer);
+            document.getElementById('form-msg').textContent = 'Ответ успешно отправлен!';
+            // Очистка формы
+            document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+            document.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], textarea').forEach(el => el.value = '');
+        } catch (error) {
+            alert('Ошибка отправки. Проверьте интернет-соединение.');
+            console.error(error);
+        }
+    }
+
+    // ------------------- УПРАВЛЕНИЕ ВКЛАДКАМИ --------------------
+    function switchTab(tab) {
+        if (tab === 'report') {
+            if (auth.currentUser) {
+                showReportPanel();
+            } else {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.getElementById('tab-report').classList.add('active');
+                document.querySelector('.tab-btn:last-child').classList.add('active');
+                document.getElementById('report-logged-out').style.display = 'block';
+                document.getElementById('report-logged-in').style.display = 'none';
+            }
+            return;
+        }
+        // Вкладка анкеты
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-form').classList.add('active');
+        document.querySelector('.tab-btn:first-child').classList.add('active');
+    }
+
+    function showReportPanel() {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-report').classList.add('active');
+        document.querySelector('.tab-btn:last-child').classList.add('active');
+        document.getElementById('report-logged-out').style.display = 'none';
+        document.getElementById('report-logged-in').style.display = 'block';
+        loadAndRenderReport();
+    }
+
+    // ------------------- АУТЕНТИФИКАЦИЯ --------------------
+    function showLoginModal() {
+        document.getElementById('login-modal').classList.add('active');
+        document.getElementById('login-error').textContent = '';
+    }
+    function closeLoginModal() {
+        document.getElementById('login-modal').classList.remove('active');
+    }
+    async function login() {
+        const email = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value;
+        if (!email || !password) {
+            document.getElementById('login-error').textContent = 'Введите email и пароль';
+            return;
+        }
+        try {
+            await auth.signInWithEmailAndPassword(email, password);
+            closeLoginModal();
+            showReportPanel();
+        } catch (error) {
+            document.getElementById('login-error').textContent = 'Неверный email или пароль';
+        }
+    }
+    async function logout() {
+        await auth.signOut();
+        switchTab('report'); // вернёмся к запросу входа
+    }
+
+    // ------------------- ЗАГРУЗКА И ОТОБРАЖЕНИЕ ОТЧЁТА --------------------
+    async function loadAndRenderReport() {
+        const snapshot = await db.ref('responses').once('value');
+        const all = snapshot.val() ? Object.values(snapshot.val()) : [];
+        document.getElementById('total-count').textContent = all.length;
+        const container = document.getElementById('stats-container');
+        if (all.length === 0) {
+            container.innerHTML = '<p>Нет данных для отчёта.</p>';
+            return;
+        }
+        let html = '';
+        const radioQs = questions.filter(q => q.type === 'radio');
+        radioQs.forEach(q => {
+            const counts = {};
+            all.forEach(a => { const v = a[q.id] || 'Нет ответа'; counts[v] = (counts[v] || 0) + 1; });
+            html += `<h3>${q.text}</h3>`;
+            Object.entries(counts).forEach(([opt, cnt]) => {
+                const pct = ((cnt / all.length) * 100).toFixed(1);
+                html += `<div class="bar"><div class="bar-fill" style="width:${pct}%;">${opt}: ${cnt} (${pct}%)</div></div>`;
+            });
+        });
+        const otherQs = questions.filter(q => q.type !== 'radio');
+        otherQs.forEach(q => {
+            html += `<h3>${q.text}</h3><ol class="text-list">`;
+            all.forEach(a => html += `<li>${escapeHtml(a[q.id] || '—')}</li>`);
+            html += `</ol>`;
+        });
+        container.innerHTML = html;
+
+        // Сохраним данные в глобальную переменную для CSV
+        window.reportData = all;
+    }
+
+    // ------------------- CSV --------------------
+    function downloadCSV() {
+        const all = window.reportData;
+        if (!all || !all.length) { alert('Нет данных'); return; }
+        const headers = [];
+        questions.forEach(q => {
+            headers.push(q.text);
+            if (q.type === 'radio') headers.push(q.comment || 'комментарий');
+        });
+        headers.push('Время заполнения');
+        let csv = headers.join(';') + '\n';
+        all.forEach(a => {
+            const row = [];
+            questions.forEach(q => {
+                row.push(escapeCsv(a[q.id] || ''));
+                if (q.type === 'radio') row.push(escapeCsv(a[q.id + '_comment'] || ''));
+            });
+            row.push(escapeCsv(a.timestamp || ''));
+            csv += row.join(';') + '\n';
+        });
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'anketa_prizyv.csv';
+        link.click();
+    }
+
+    // Вспомогательные функции
+    function escapeHtml(s) { return String(s).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[m]); }
+    function escapeCsv(s) { if (String(s).includes(';') || String(s).includes('"') || String(s).includes('\n')) return '"' + String(s).replace(/"/g, '""') + '"'; return s; }
+
+    // Отслеживание состояния аутентификации
+    auth.onAuthStateChanged(user => {
+        // Ничего не делаем, просто обновляем интерфейс при необходимости
+    });
+
+    // Инициализация
+    window.onload = () => {
+        buildForm();
+        document.getElementById('login-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeLoginModal();
+        });
+    };
+</script>
+</body>
+</html>
