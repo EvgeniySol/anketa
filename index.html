@@ -66,6 +66,21 @@
 <div id="tab-form" class="tab-content active">
     <h2>Анонимный опрос военнослужащего по призыву</h2>
     <p>Отвечайте честно. Ответы анонимны и передаются в зашифрованном виде.</p>
+    <div class="question">
+    <p class="q-title">Выберите ваше подразделение <span style="color:red;">*</span></p>
+    <select id="unit-select" required style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccd5e0; font-size:14px; background:white;">
+        <option value="">-- выберите подразделение --</option>
+        <option value="1 управление">1 управление</option>
+        <option value="2 управление">2 управление</option>
+        <option value="3 управление">3 управление</option>
+        <option value="4 управление">4 управление</option>
+        <option value="5 управление">5 управление</option>
+        <option value="6 управление">6 управление</option>
+        <option value="7 управление">7 управление</option>
+        <option value="8 управление">8 управление</option>
+        <option value="База (обеспечения)">База (обеспечения)</option>
+    </select>
+    </div>
     <form id="survey-form"></form>
     <button class="primary" onclick="submitForm()">✅ Отправить анонимные ответы</button>
     <p id="form-msg" style="margin-top:12px; color:#1e8449; font-weight:bold;"></p>
@@ -166,6 +181,12 @@
     async function submitForm() {
         const answer = {};
         let valid = true;
+        // Проверка обязательного выбора подразделения
+        const unitSelect = document.getElementById('unit-select');
+        if (!unitSelect.value) {
+            alert('Пожалуйста, выберите подразделение перед отправкой.');
+            return;
+        }
         questions.forEach(q => {
             if (q.type === 'radio') {
                 const radios = document.getElementsByName(q.id);
@@ -186,6 +207,7 @@
         });
         if (!valid) return;
 
+        answer['unit'] = unitSelect.value;
         answer.timestamp = new Date().toISOString();
         try {
             await db.ref('responses').push(answer);
@@ -193,6 +215,7 @@
             // Очистка формы
             document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
             document.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], textarea').forEach(el => el.value = '');
+            unitSelect.value = '';
         } catch (error) {
             alert('Ошибка отправки. Проверьте интернет-соединение.');
             console.error(error);
@@ -286,6 +309,11 @@
             all.forEach(a => html += `<li>${escapeHtml(a[q.id] || '—')}</li>`);
             html += `</ol>`;
         });
+        html += '<h3>Подразделение</h3><ol class="text-list">';
+        all.forEach(a => {
+            html += `<li>${escapeHtml(a['unit'] || 'не указано')}</li>`;
+        });
+        html += '</ol>';
         container.innerHTML = html;
 
         // Сохраним данные в глобальную переменную для CSV
