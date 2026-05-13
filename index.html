@@ -22,9 +22,22 @@
 
         body {
             max-width: 800px;
-            margin: 20px auto;
-            padding: 20px;
-            background: linear-gradient(135deg, #e9f0f6 0%, #ffffff 100%);
+            margin: 0 auto;
+            padding: 15px;
+            min-height: 100vh;
+            /* Анимированный градиентный фон */
+            background: linear-gradient(135deg, #003d6b, #e9f0f6, #f47920, #e9f0f6, #003d6b);
+            background-size: 400% 400%;
+            animation: gradientBG 20s ease infinite;
+        }
+        
+        /* Ключевые кадры анимации */
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            25% { background-position: 100% 0%; }
+            50% { background-position: 100% 100%; }
+            75% { background-position: 0% 100%; }
+            100% { background-position: 0% 50%; }
         }
 
         /* Шапка с местом под иконку */
