@@ -555,6 +555,8 @@
             return;
         }
         let html = '';
+    
+        // 1. Статистика по Да/Нет вопросам (остаётся без изменений)
         const radioQs = questions.filter(q => q.type === 'radio');
         radioQs.forEach(q => {
             const counts = {};
@@ -565,20 +567,42 @@
                 html += `<div class="bar"><div class="bar-fill" style="width:${pct}%;">${opt}: ${cnt} (${pct}%)</div></div>`;
             });
         });
+    
+        // 2. Текстовые/числовые/дата вопросы — группировка по ответам
         const otherQs = questions.filter(q => q.type !== 'radio');
         otherQs.forEach(q => {
-            html += `<h3>${q.text}</h3><ol class="text-list">`;
-            all.forEach(a => html += `<li>${escapeHtml(a[q.id] || '—')}</li>`);
-            html += `</ol>`;
+            html += `<h3>${q.text}</h3>`;
+            // Собираем статистику: сколько раз встретился каждый ответ
+            const counts = {};
+            all.forEach(a => {
+                const val = a[q.id] ? a[q.id].trim() : '';
+                const display = val || '(не указано)';
+                counts[display] = (counts[display] || 0) + 1;
+            });
+            // Сортируем по убыванию частоты
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            html += '<ol class="text-list">';
+            sorted.forEach(([answer, cnt]) => {
+                html += `<li><strong>${escapeHtml(answer)}</strong> — ${cnt} чел.</li>`;
+            });
+            html += '</ol>';
         });
-        html += '<h3>Подразделение</h3><ol class="text-list">';
+    
+        // 3. Статистика по подразделениям (отдельно)
+        html += '<h3>📋 Подразделения</h3>';
+        const unitCounts = {};
         all.forEach(a => {
-            html += `<li>${escapeHtml(a['unit'] || 'не указано')}</li>`;
+            const unit = a['unit'] ? a['unit'].trim() : '(не выбрано)';
+            unitCounts[unit] = (unitCounts[unit] || 0) + 1;
+        });
+        const sortedUnits = Object.entries(unitCounts).sort((a, b) => b[1] - a[1]);
+        html += '<ol class="text-list">';
+        sortedUnits.forEach(([unit, cnt]) => {
+            html += `<li><strong>${escapeHtml(unit)}</strong> — ${cnt} чел.</li>`;
         });
         html += '</ol>';
+    
         container.innerHTML = html;
-
-        // Сохраним данные в глобальную переменную для CSV
         window.reportData = all;
     }
 
