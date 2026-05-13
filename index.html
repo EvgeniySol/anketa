@@ -37,20 +37,15 @@
             border-radius: 12px;
         }
         .header-logo {
-            width: 50px;
+            width: 50px;                /* можно увеличить, например 60px */
             height: 50px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 24px;
-            flex-shrink: 0;
-            /* Замените background-image на свою иконку */
+            background-image: url('logo.png');   /* имя вашего файла */
             background-size: contain;
             background-repeat: no-repeat;
             background-position: center;
+            border-radius: 0;           /* если не нужен закруглённый фон */
+            /* убрали текст */
+            flex-shrink: 0;
         }
         .header-title {
             font-size: 20px;
@@ -325,6 +320,11 @@
     const auth = firebase.auth();
 </script>
 
+<div class="header">
+    <div class="header-logo" id="mchs-logo"></div>
+    <div class="header-title">Анонимный опрос военнослужащего по призыву</div>
+</div>
+    
 <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('form')">📝 Анкета</button>
     <button class="tab-btn" onclick="switchTab('report')">📊 Отчёт (вход)</button>
